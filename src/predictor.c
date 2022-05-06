@@ -162,8 +162,7 @@ uint8_t tour_predict(uint32_t pc) {
   uint8_t tourPrediction;
   uint8_t localPrediction;
   
-  // conduct gshare prediction
-  gsharePrediction = gshare_predict(pc);
+  // conduct global history prediction
 
   // conduct 2-level local prediction
   int historyBits = 1 << lhistoryBits;
@@ -192,11 +191,24 @@ uint8_t tour_predict(uint32_t pc) {
 }
 
 void train_tour(uint32_t pc, uint8_t outcome) {
-  // train gshare
-  train_gshare(pc, outcome);
-
-  // NOTE: likely have to update based on choice bit
-  // NOTE: how to capture local history?
+  // train global history predictor
+  switch(lpredictors[lHistoryTable]]) {
+    case SN:
+      lpredictors[lHistoryTable] = (outcome == TAKEN) ? WN : SN;
+      break;
+    case WN:
+      lpredictors[lHistoryTable] = (outcome == TAKEN) ? WT : SN;
+      break;
+    case WT:
+      lpredictors[lHistoryTable] = (outcome == TAKEN) ? ST : WN;
+      break;
+    case ST:
+      lpredictors[lHistoryTable] = (outcome == TAKEN) ? ST : WT;
+      break;
+    default:
+      break;
+  }
+  lHistoryTable = ((lHistoryTable << 1 ) | outcome);
 
   // train 2-level local
   uint32_t historyBits = 1 << lhistoryBits;
@@ -221,7 +233,8 @@ void train_tour(uint32_t pc, uint8_t outcome) {
       break;
   }
   lHistoryTable = ((lHistoryTable << 1 ) | outcome);
-  // train choice BHT (?)
+
+  // train choice BHT 
 
 }
 
@@ -229,7 +242,7 @@ void cleanup_tour() {
 
 }
 
-// custom functions
+// custom predictor (probably TAGE)
 // TODO 
 
 
