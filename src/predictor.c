@@ -158,11 +158,25 @@ void init_tour(){
 }
 
 uint8_t tour_predict(uint32_t pc) {
-  uint8_t gsharePrediction; 
+  uint8_t globalPrediction; 
   uint8_t tourPrediction;
   uint8_t localPrediction;
-  
+  uint8_t choicePrediction;
+
   // conduct global history prediction
+  switch(gpredictors[gHistoryTable]) {
+    case SN:
+      globalPrediction = NOTTAKEN;
+    case WN:
+      globalPrediction = NOTTAKEN;
+    case WT:
+      globalPrediction = TAKEN;
+    case ST:
+      globalPrediction = TAKEN;
+    default:
+      printf("Undefined state in predictor table");
+      globalPrediction = NOTTAKEN;
+  }
 
   // conduct 2-level local prediction
   int historyBits = 1 << lhistoryBits;
@@ -185,30 +199,49 @@ uint8_t tour_predict(uint32_t pc) {
   }
 
   // choice BHT prediction final mux
-  // TODO
+  switch(cpredictors[gHistoryTable]) {
+    case SN:
+      choicePrediction = NOTTAKEN;
+    case WN:
+      choicePrediction = NOTTAKEN;
+    case WT:
+      choicePrediction = TAKEN;
+    case ST:
+      choicePrediction = TAKEN;
+    default:
+      printf("Undefined state in predictor table");
+      choicePrediction = NOTTAKEN;
+  }
+
+  if(choicePrediction == TAKEN){
+    tourPrediction = localPrediction;
+  } else{
+    tourPrediction = globalPrediction;
+  }
 
   return tourPrediction;
 }
 
+// QUESTION: how does the ghr get limited to 12 bits...
 void train_tour(uint32_t pc, uint8_t outcome) {
   // train global history predictor
-  switch(lpredictors[lHistoryTable]]) {
+  switch(gpredictors[gHistoryTable]]) {
     case SN:
-      lpredictors[lHistoryTable] = (outcome == TAKEN) ? WN : SN;
+      gpredictors[gHistoryTable] = (outcome == TAKEN) ? WN : SN;
       break;
     case WN:
-      lpredictors[lHistoryTable] = (outcome == TAKEN) ? WT : SN;
+      gpredictors[gHistoryTable] = (outcome == TAKEN) ? WT : SN;
       break;
     case WT:
-      lpredictors[lHistoryTable] = (outcome == TAKEN) ? ST : WN;
+      gpredictors[gHistoryTable] = (outcome == TAKEN) ? ST : WN;
       break;
     case ST:
-      lpredictors[lHistoryTable] = (outcome == TAKEN) ? ST : WT;
+      gpredictors[gHistoryTable] = (outcome == TAKEN) ? ST : WT;
       break;
     default:
       break;
   }
-  lHistoryTable = ((lHistoryTable << 1 ) | outcome);
+  gHistoryTable = ((gHistoryTable << 1 ) | outcome);
 
   // train 2-level local
   uint32_t historyBits = 1 << lhistoryBits;
@@ -235,11 +268,31 @@ void train_tour(uint32_t pc, uint8_t outcome) {
   lHistoryTable = ((lHistoryTable << 1 ) | outcome);
 
   // train choice BHT 
+  switch(cpredictors[gHistoryTable]]) {
+    case SN:
+      cpredictors[gHistoryTable] = (outcome == TAKEN) ? WN : SN;
+      break;
+    case WN:
+      cpredictors[gHistoryTable] = (outcome == TAKEN) ? WT : SN;
+      break;
+    case WT:
+      cpredictors[gHistoryTable] = (outcome == TAKEN) ? ST : WN;
+      break;
+    case ST:
+      cpredictors[gHistoryTable] = (outcome == TAKEN) ? ST : WT;
+      break;
+    default:
+      break;
+  }
+  gHistoryTable = ((gHistoryTable << 1 ) | outcome);
+
 
 }
 
 void cleanup_tour() {
-
+  free(gpredictors);
+  free(cpredictors);
+  free(lpredictors);
 }
 
 // custom predictor (probably TAGE)
