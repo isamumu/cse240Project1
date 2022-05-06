@@ -25,7 +25,7 @@ const char *bpName[4] = { "Static", "Gshare",
                           "Tournament", "Custom" };
 
 //define number of bits required for indexing the BHT here. 
-int ghistoryBits = 13; // Number of bits used for Global History
+int ghistoryBits = 13; // PREV 13!!!! // Number of bits used for Global History
 int bpType;       // Branch Prediction Type
 int verbose;
 
@@ -128,28 +128,14 @@ cleanup_gshare() {
 void init_tour(){
 
   // init global prediction table (12 bits)
-  int historyBits = 1 << 12;
-  gpredictors = (int*) malloc(historyBits * sizeof(int));
-
-  for(int i = 0; i <= historyBits; i++) {
-    gpredictors[i] = WN;
-    printf("%u\n", gpredictors[i]);
-  }
+  init_gshare();
 
   // init global history table (12 bits)
-  gHistoryTable = 0;
 
   // init local history table (10 bits)
-  historyBits = 1 << lhistoryBits; // store total number of bits possible
-  lpredictors = (int*) malloc(historyBits * sizeof(int)); // allocate space for pht
-
-  for(int i = 0; i <= historyBits; i++) { // set WN to 2^10 states
-    lpredictors[i] = WN;
-  }
-  lHistoryTable = 0;
-
+  
   // initialize the choice prediction table (size 12 bits)
-  historyBits = 1 << 12;
+  int historyBits = 1 << ghistoryBits;
   cpredictors = (int*) malloc(historyBits * sizeof(int));
 
   for(int i = 0; i <= historyBits; i++) { // set WN to 2^10 states
@@ -165,64 +151,27 @@ uint8_t tour_predict(uint32_t pc) {
   uint8_t choicePrediction;
   
   // conduct global history prediction
-  uint32_t historyBits = 1 << 12;
-  uint32_t pc_lower_bits = pc & (historyBits - 1);
-  uint32_t ghistory_lower = gHistoryTable & (historyBits - 1);
-  uint32_t ghistoryIndex = pc_lower_bits ^ (ghistory_lower);
-
-  switch(gpredictors[ghistoryIndex]) {
-    case SN:
-      globalPrediction = NOTTAKEN;
-    case WN:
-      globalPrediction = NOTTAKEN;
-    case WT:
-      globalPrediction = TAKEN;
-    case ST:
-      globalPrediction = TAKEN;
-    default:
-      printf("Undefined state in predictor table 0 ");
-      globalPrediction = NOTTAKEN;
-  }
 
   // conduct 2-level local prediction
-  historyBits = 1 << lhistoryBits;
-  pc_lower_bits = pc & (historyBits - 1);
-  int lhistory_lower = lHistoryTable & (historyBits - 1);
-  int lhistoryIndex = pc_lower_bits ^ (lhistory_lower);
-
-  switch(lpredictors[lhistoryIndex]) {
-    case SN:
-      localPrediction = NOTTAKEN;
-    case WN:
-      localPrediction = NOTTAKEN;
-    case WT:
-      localPrediction = TAKEN;
-    case ST:
-      localPrediction = TAKEN;
-    default:
-      printf("Undefined state in predictor table 1 ");
-      localPrediction = NOTTAKEN;
-  }
-
+  
   // choice BHT prediction final mux
-  switch(cpredictors[gHistoryTable]) {
+  int historyBits = 1 << ghistoryBits;
+  int pc_lower_bits = pc & (historyBits - 1);
+  int ghistory_lower = gHistoryTable & (historyBits - 1);
+  int historyIndex = pc_lower_bits ^ (ghistory_lower);
+
+  switch(gpredictors[historyIndex]) {
     case SN:
-      choicePrediction = NOTTAKEN;
+      return gshare_predict(pc);
     case WN:
-      choicePrediction = NOTTAKEN;
+      return gshare_predict(pc);
     case WT:
-      choicePrediction = TAKEN;
+      return TAKEN;
     case ST:
-      choicePrediction = TAKEN;
+      return TAKEN;
     default:
       printf("Undefined state in predictor table 2 ");
-      choicePrediction = NOTTAKEN;
-  }
-
-  if(choicePrediction == TAKEN){
-    tourPrediction = localPrediction;
-  } else{
-    tourPrediction = globalPrediction;
+      return NOTTAKEN;
   }
 
   return tourPrediction;
@@ -231,74 +180,37 @@ uint8_t tour_predict(uint32_t pc) {
 // QUESTION: how does the ghr get limited to 12 bits...
 void train_tour(uint32_t pc, uint8_t outcome) {
   // train global history predictor
-  uint32_t historyBits = 1 << 12;
-  uint32_t pc_lower_bits = pc & (historyBits - 1);
-  uint32_t ghistory_lower = gHistoryTable & (historyBits - 1);
-  uint32_t ghistoryIndex = pc_lower_bits ^ (ghistory_lower);
-
-  switch(gpredictors[ghistoryIndex]) {
-    case SN:
-      gpredictors[ghistoryIndex] = (outcome == TAKEN) ? WN : SN;
-      break;
-    case WN:
-      gpredictors[ghistoryIndex] = (outcome == TAKEN) ? WT : SN;
-      break;
-    case WT:
-      gpredictors[ghistoryIndex] = (outcome == TAKEN) ? ST : WN;
-      break;
-    case ST:
-      gpredictors[ghistoryIndex] = (outcome == TAKEN) ? ST : WT;
-      break;
-    default:
-      break;
-  }
+  train_gshare(pc, outcome);
   //printf("global training done \n\n");
 
   // train 2-level local
-  historyBits = 1 << lhistoryBits;
-  pc_lower_bits = pc & (historyBits - 1);
-  uint32_t lhistory_lower = lHistoryTable & (historyBits - 1);
-  uint32_t lhistoryIndex = pc_lower_bits ^ (lhistory_lower);
-
-  switch(lpredictors[lhistoryIndex]) {
-    case SN:
-      lpredictors[lhistoryIndex] = (outcome == TAKEN) ? WN : SN;
-      break;
-    case WN:
-      lpredictors[lhistoryIndex] = (outcome == TAKEN) ? WT : SN;
-      break;
-    case WT:
-      lpredictors[lhistoryIndex] = (outcome == TAKEN) ? ST : WN;
-      break;
-    case ST:
-      lpredictors[lhistoryIndex] = (outcome == TAKEN) ? ST : WT;
-      break;
-    default:
-      break;
-  }
-  lHistoryTable = ((lHistoryTable << 1 ) | outcome);
-  //printf("local training done \n");
 
   // train choice 
-  switch(cpredictors[ghistoryIndex]) {
+  uint32_t historyBits = 1 << ghistoryBits;
+  uint32_t pc_lower_bits = pc & (historyBits - 1);
+  uint32_t ghistory_lower = gHistoryTable & (historyBits - 1);
+  uint32_t historyIndex = pc_lower_bits ^ (ghistory_lower);
+  
+  switch(cpredictors[historyIndex]) {
     case SN:
-      cpredictors[ghistoryIndex] = (outcome == TAKEN) ? WN : SN;
+      cpredictors[historyIndex] = (outcome == TAKEN) ? WN : SN;
+      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case WN:
-      cpredictors[ghistoryIndex] = (outcome == TAKEN) ? WT : SN;
+      cpredictors[historyIndex] = (outcome == TAKEN) ? WT : SN;
+      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case WT:
-      cpredictors[ghistoryIndex] = (outcome == TAKEN) ? ST : WN;
+      cpredictors[historyIndex] = (outcome == TAKEN) ? ST : WN;
+      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case ST:
-      cpredictors[ghistoryIndex] = (outcome == TAKEN) ? ST : WT;
+      cpredictors[historyIndex] = (outcome == TAKEN) ? ST : WT;
+      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     default:
       break;
   }
-  gHistoryTable = ((gHistoryTable << 1 ) | outcome);
-  printf("=> %u", gHistoryTable);
-
   //printf("choice training done\n");
 
 }
