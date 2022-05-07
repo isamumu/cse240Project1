@@ -181,7 +181,7 @@ void train_global(uint8_t outcome) {
     default:
       break;
   }
-  ghr = ((ghr << 1 ) | outcome);
+  //ghr = ((ghr << 1 ) | outcome);
 }
 
 void
@@ -276,6 +276,8 @@ void init_tour(){
   init_global();
   // init local history table (10 bits)
   init_local();
+
+  //init_gshare();
   
   // initialize the choice prediction table (size 12 bits)
   int historyBits = 1 << ghistoryBits;
@@ -298,15 +300,19 @@ uint8_t tour_predict(uint32_t pc) {
   switch(cpredictors[ghr_lower]) {
     case SN:
       // printf("\ncase 1\n");
+      //ghr = ((ghr << 1 ) | local_predict(pc));
       return local_predict(pc);
     case WN:
       // printf("\ncase 2\n");
+      //ghr = ((ghr << 1 ) | local_predict(pc));
       return local_predict(pc);
     case WT:
       // printf("\ncase 3\n");
+      //ghr = ((ghr << 1 ) | global_predict());
       return global_predict();
     case ST:
       // printf("\ncase 4\n");
+      //ghr = ((ghr << 1 ) | global_predict());
       return global_predict();
     default:
       printf("Undefined state in predictor table 2 ");
@@ -325,6 +331,8 @@ void train_tour(uint32_t pc, uint8_t outcome) {
   //printf("\ntraining local done\n");
   //printf("global training done \n\n");
   train_global(outcome);
+
+  //train_gshare(pc, outcome);
   //printf("\ntraining global done\n");
   // train 2-level local
 
@@ -353,6 +361,7 @@ void train_tour(uint32_t pc, uint8_t outcome) {
       break;
   }
   //printf("choice training done\n");
+  ghr = ((ghr << 1 ) | outcome);
 
 }
 
