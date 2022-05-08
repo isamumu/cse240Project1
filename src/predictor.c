@@ -30,9 +30,9 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-int localhistoryBits = 10; 
+int localhistoryBits = 10; // 10 
 int globalhistoryBits = 12; // 12 origin
-int globalhistoryBits2 = 18; // for 2nd attempt for tournament
+int globalhistoryBits2 = 17; // for 2nd attempt for tournament
 const int N = 16; // number of weights for perceptron (0th input is 1)
 double theta = 1.93*N + 14; // for perceptron training threshold
 int y;
@@ -214,23 +214,18 @@ void init_local() {
 uint8_t local_predict(uint32_t pc) {
   int historyBits = 1 << localhistoryBits;
   int pc_bits = pc & (historyBits - 1);
-  // int ghistory_lower = gHistoryTable & (historyBits - 1);
-  // int historyIndex = pc_lower_bits ^ (ghistory_lower);
   
   //printf("\nstarting predict\n");
   int index = localHistoryTable[pc_bits] & (historyBits - 1);
+
   switch(localpredictors[index]) {
     case SN:
-      //printf("\nlocal predicted\n");
       return NOTTAKEN;
     case WN:
-      //printf("\nlocal predicted\n");
       return NOTTAKEN;
     case WT:
-      //printf("\nlocal predicted\n");
       return TAKEN;
     case ST:
-      //printf("\nlocal predicted\n");
       return TAKEN;
     default:
       printf("Undefined state in predictor table");
@@ -248,6 +243,7 @@ void train_local(uint32_t pc, uint8_t outcome) {
   // printf("hi: %u\n", localHistoryTable[pc_bits]);
   // printf("\n--->%u\n",localpredictors[localHistoryTable[pc_bits]]);
   int index = localHistoryTable[pc_bits] & (historyBits - 1);
+
   switch(localpredictors[index]) {
     case SN:
       localpredictors[index] = (outcome == TAKEN) ? WN : SN;
@@ -279,8 +275,6 @@ void init_tour(){
   init_global();
   // init local history table (10 bits)
   init_local();
-
-  //init_gshare();
   
   // initialize the choice prediction table (size 12 bits)
   int historyBits = 1 << globalhistoryBits;
@@ -450,7 +444,6 @@ void init_global2() {
   for(int i = 0; i < historyBits; i++) {
     globalpredictors2[i] = WN;
   }
-  ghr = 0;
 }
 
 uint8_t global2_predict(uint8_t pc){;
@@ -515,16 +508,20 @@ void init_tour2(){
   // init global prediction table (12 bits)
   init_global2();
   init_gshare();
+  init_local();
   
   // initialize the choice prediction table (size 12 bits)
   int historyBits = 1 << globalhistoryBits2;
   cpredictors = (int*) malloc(historyBits * sizeof(int));
 
   for(int i = 0; i < historyBits; i++) { // set WN to 2^10 states
-    cpredictors[i] = WN;
+    cpredictors[i] = WWN; // init to WWN instead of WN
   }
+
+  ghr = 0;
 }
 
+// local vs. gshare tournament with hysterisis
 uint8_t tour2_predict(uint32_t pc) { 
   // conduct global history prediction
   // choice BHT prediction final mux
@@ -537,13 +534,13 @@ uint8_t tour2_predict(uint32_t pc) {
     case WN:
       return gshare_predict(pc);
     case WWN:
-      return gshare_predict(pc);
+      return local_predict(pc);
     case WWT:
-      return global2_predict(pc);
+      return local_predict(pc);
     case WT:
-      return global2_predict(pc);
+      return gshare_predict(pc);
     case ST:
-      return global2_predict(pc);
+      return gshare_predict(pc);
     default:
       printf("Undefined state in predictor table 2 ");
       return NOTTAKEN;
@@ -552,10 +549,10 @@ uint8_t tour2_predict(uint32_t pc) {
 
 // QUESTION: how does the ghr get limited to 12 bits...
 void train_tour2(uint32_t pc, uint8_t outcome) {
-  // train local
+  // train 
   train_gshare(pc, outcome); 
-  // train global
   train_global2(pc, outcome);
+  train_local(pc, outcome);
 
   // train choice 
   uint32_t historyBits = 1 << globalhistoryBits2;
@@ -575,7 +572,7 @@ void train_tour2(uint32_t pc, uint8_t outcome) {
       cpredictors[ghr_lower] = (outcome == TAKEN) ? WT : WWN;
       break;
     case WT:
-      cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WN;
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WWT;
       break;
     case ST:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WT;
@@ -583,7 +580,7 @@ void train_tour2(uint32_t pc, uint8_t outcome) {
     default:
       break;
   }
-  //printf("choice training done\n");
+  
   ghr = ((ghr << 1 ) | outcome);
 
 }
