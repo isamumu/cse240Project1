@@ -32,7 +32,7 @@ int verbose;
 // NEW
 int localhistoryBits = 10; 
 int globalhistoryBits = 12; // 12 origin
-int globalhistoryBits2 = 28; // for 2nd attempt for tournament
+int globalhistoryBits2 = 18; // for 2nd attempt for tournament
 const int N = 16; // number of weights for perceptron (0th input is 1)
 double theta = 1.93*N + 14; // for perceptron training threshold
 int y;
@@ -76,7 +76,7 @@ void init_gshare() {
   int historyBits = 1 << ghistoryBits;
   gpredictors = (int*) malloc(historyBits * sizeof(int));
 
-  for(int i = 0; i <= historyBits; i++) {
+  for(int i = 0; i < historyBits; i++) {
     gpredictors[i] = WN;
   }
   gHistoryTable = 0;
@@ -99,7 +99,7 @@ gshare_predict(uint32_t pc) {
     case ST:
       return TAKEN;
     default:
-      printf("Undefined state in predictor table");
+      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
       return NOTTAKEN;
   }
 }
@@ -125,6 +125,7 @@ train_gshare(uint32_t pc, uint8_t outcome) {
       gpredictors[historyIndex] = (outcome == TAKEN) ? ST : WT;
       break;
     default:
+      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
       break;
   }
   gHistoryTable = ((gHistoryTable << 1 ) | outcome);
@@ -456,9 +457,8 @@ uint8_t global2_predict(uint8_t pc){;
   uint32_t historyBits = 1 << globalhistoryBits2;
   uint32_t ghr_lower = ghr & (historyBits - 1);
 
-
-  int pc_lower_bits = pc & (historyBits - 1);
-  ghr_lower= pc_lower_bits ^ (ghr_lower);
+  // int pc_lower_bits = pc & (historyBits - 1);
+  // ghr_lower= pc_lower_bits ^ (ghr_lower);
 
   //printf("\nprediction start\n");
   switch(globalpredictors2[ghr_lower]) {
@@ -483,8 +483,8 @@ void train_global2(uint8_t pc, uint8_t outcome) {
   uint32_t historyBits = 1 << globalhistoryBits2;
   uint32_t ghr_lower = ghr & (historyBits - 1);
 
-  int pc_lower_bits = pc & (historyBits - 1);
-  ghr_lower= pc_lower_bits ^ (ghr_lower);
+  // int pc_lower_bits = pc & (historyBits - 1);
+  // ghr_lower= pc_lower_bits ^ (ghr_lower);
 
   switch(globalpredictors2[ghr_lower]) {
     case SN:
@@ -536,6 +536,10 @@ uint8_t tour2_predict(uint32_t pc) {
       return gshare_predict(pc);
     case WN:
       return gshare_predict(pc);
+    case WWN:
+      return gshare_predict(pc);
+    case WWT:
+      return global2_predict(pc);
     case WT:
       return global2_predict(pc);
     case ST:
@@ -562,7 +566,13 @@ void train_tour2(uint32_t pc, uint8_t outcome) {
       cpredictors[ghr_lower] = (outcome == TAKEN) ? WN : SN;
       break;
     case WN:
-      cpredictors[ghr_lower] = (outcome == TAKEN) ? WT : SN;
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? WWN : SN;
+      break;
+    case WWN:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? WWT : WN;
+      break;
+    case WWT:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? WT : WWN;
       break;
     case WT:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WN;
