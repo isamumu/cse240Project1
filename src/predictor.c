@@ -30,9 +30,12 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-int localhistoryBits = 10;
-int globalhistoryBits = 12;
-
+int localhistoryBits = 10; 
+int globalhistoryBits = 12; // 12 origin
+int globalhistoryBits2 = 28; // for 2nd attempt for tournament
+const int N = 16; // number of weights for perceptron (0th input is 1)
+double theta = 1.93*N + 14; // for perceptron training threshold
+int y;
 
 // NOTE TO SELF: Gshare and static already given. Implement Tournament and custom (tage)
 
@@ -50,8 +53,13 @@ int gHistoryTable;
 // tournament
 int *localpredictors; // local predictors
 int *globalpredictors;
+int *globalpredictors2;
 int *cpredictors; // choice predictors
 int *localHistoryTable; // local history table
+int **perceptronTable; // perceptron table
+int pghr[N-1];
+int num_pghr = 0;
+int prediction; // for perceptron
 int ghr;
 
 // custom (tage)
@@ -67,6 +75,7 @@ int ghr;
 void init_gshare() {
   int historyBits = 1 << ghistoryBits;
   gpredictors = (int*) malloc(historyBits * sizeof(int));
+
   for(int i = 0; i <= historyBits; i++) {
     gpredictors[i] = WN;
   }
@@ -131,7 +140,7 @@ cleanup_gshare() {
 void init_global() {
   int historyBits = 1 << globalhistoryBits;
   globalpredictors = (int*) malloc(historyBits * sizeof(int));
-  for(int i = 0; i <= historyBits; i++) {
+  for(int i = 0; i < historyBits; i++) {
     globalpredictors[i] = WN;
   }
   ghr = 0;
@@ -144,19 +153,14 @@ uint8_t global_predict(){;
   //printf("\nprediction start\n");
   switch(globalpredictors[ghr_lower]) {
     case SN:
-      //printf("\nglobal predicted\n");
       return NOTTAKEN;
     case WN:
-      //printf("\nglobal predicted\n");
       return NOTTAKEN;
     case WT:
-      //printf("\nglobal predicted\n");
       return TAKEN;
     case ST:
-      //printf("\nglobal predicted\n");
       return TAKEN;
     default:
-      //printf("Undefined state in predictor table");
       return NOTTAKEN;
   }
 }
@@ -199,7 +203,7 @@ void init_local() {
   // first empty, if the address is not found, and the map is not full, add the key and value.
   // note localpredictors also need to be maps of local histories...
 
-  for(int i = 0; i <= historyBits; i++) {
+  for(int i = 0; i < historyBits; i++) {
     localpredictors[i] = WN;
     localHistoryTable[i] = 0; // 1023 of them, but the indices won't be the same! need a map
   }
@@ -231,8 +235,6 @@ uint8_t local_predict(uint32_t pc) {
       printf("Undefined state in predictor table");
       return NOTTAKEN;
   }
-
-  
 }
 
 void train_local(uint32_t pc, uint8_t outcome) {
@@ -280,15 +282,12 @@ void init_tour(){
   //init_gshare();
   
   // initialize the choice prediction table (size 12 bits)
-  int historyBits = 1 << ghistoryBits;
+  int historyBits = 1 << globalhistoryBits;
   cpredictors = (int*) malloc(historyBits * sizeof(int));
 
-  for(int i = 0; i <= historyBits; i++) { // set WN to 2^10 states
+  for(int i = 0; i < historyBits; i++) { // set WN to 2^10 states
     cpredictors[i] = WN;
   }
-
-  //printf("\ninit tour done\n");
-
 }
 
 uint8_t tour_predict(uint32_t pc) { 
@@ -299,20 +298,12 @@ uint8_t tour_predict(uint32_t pc) {
 
   switch(cpredictors[ghr_lower]) {
     case SN:
-      // printf("\ncase 1\n");
-      //ghr = ((ghr << 1 ) | local_predict(pc));
       return local_predict(pc);
     case WN:
-      // printf("\ncase 2\n");
-      //ghr = ((ghr << 1 ) | local_predict(pc));
       return local_predict(pc);
     case WT:
-      // printf("\ncase 3\n");
-      //ghr = ((ghr << 1 ) | global_predict());
       return global_predict();
     case ST:
-      // printf("\ncase 4\n");
-      //ghr = ((ghr << 1 ) | global_predict());
       return global_predict();
     default:
       printf("Undefined state in predictor table 2 ");
@@ -324,17 +315,10 @@ uint8_t tour_predict(uint32_t pc) {
 
 // QUESTION: how does the ghr get limited to 12 bits...
 void train_tour(uint32_t pc, uint8_t outcome) {
-  // train global history predictor
-
-  train_local(pc, outcome); // BUGGED
-
-  //printf("\ntraining local done\n");
-  //printf("global training done \n\n");
+  // train local
+  train_local(pc, outcome); 
+  // train global
   train_global(outcome);
-
-  //train_gshare(pc, outcome);
-  //printf("\ntraining global done\n");
-  // train 2-level local
 
   // train choice 
   uint32_t historyBits = 1 << globalhistoryBits;
@@ -343,19 +327,15 @@ void train_tour(uint32_t pc, uint8_t outcome) {
   switch(cpredictors[ghr_lower]) {
     case SN:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? WN : SN;
-      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case WN:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? WT : SN;
-      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case WT:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WN;
-      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     case ST:
       cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WT;
-      //printf("cpredictor => %u\n", cpredictors[historyIndex]);
       break;
     default:
       break;
@@ -369,11 +349,241 @@ void cleanup_tour() {
   free(globalpredictors);
   free(cpredictors);
   free(localpredictors);
+  free(gpredictors);
 }
 
-// custom predictor (probably TAGE)
-// TODO 
+// custom predictor 
+void init_percep(){
+  int weightBits = 1 << N;
+  perceptronTable = (int**) malloc((weightBits) * sizeof(int*));
 
+  // allocate array of weights for each entry of the perceptron table (indexed by addresses)
+  for(int i = 0; i < weightBits; i++) { // set WN to 2^10 states
+    perceptronTable[i] = (int*) malloc(N * sizeof(int));
+
+    for(int j = 0; j < N; j++){
+      perceptronTable[i][j] = 0;
+    }
+  }
+
+  for(int i = 0; i < N-1; i++){
+    pghr[i] = 0;
+  }
+}
+
+uint8_t percep_predict(uint32_t pc) { 
+  uint32_t historyBits = 1 << N;
+  uint32_t pc_bits = pc & (historyBits - 1);
+
+  y = 0;
+
+  for(int i = 0; i < N; i++){
+    if(i == 0){
+      y += 1*perceptronTable[pc_bits][i];
+    } else{
+      y += pghr[i]*perceptronTable[pc_bits][i];
+    }
+  }
+
+  // comparator
+  if(y > 0){
+    return TAKEN;
+  } else{
+    return NOTTAKEN;
+  } 
+}
+
+void train_percep(uint32_t pc, uint8_t outcome) {
+  uint32_t historyBits = 1 << N;
+  uint32_t pc_bits = pc & (historyBits - 1);
+
+  y = 0;
+
+  for(int i = 0; i < N; i++){
+    if(i == 0){
+      y += 1*perceptronTable[pc_bits][i];
+    } else{
+      y += pghr[i-1]*perceptronTable[pc_bits][i];
+    }
+  }
+
+  // comparator
+  if(y > 0){
+    prediction = TAKEN;
+  } else{
+    prediction = NOTTAKEN;
+  } 
+
+  // update the weights in perceptron table
+  if((prediction != outcome) || abs(y) < theta){
+    for(int i = 0; i < N; i++){
+      if(i == 0){
+        perceptronTable[pc_bits][i] = outcome;
+      } else{
+        perceptronTable[pc_bits][i] += outcome*pghr[i-1];
+      }
+    }
+  }
+
+  if(num_pghr < N){
+    pghr[num_pghr] = outcome;
+    num_pghr++; 
+  } else{
+    for(int i = N-1; i >= 1; i--){
+      pghr[i] = pghr[i-1];
+    }
+    pghr[0] = outcome;
+  }
+
+}
+
+void cleanup_percep() {
+  free(perceptronTable);
+}
+
+// custom attempt 2
+// tournament functions
+void init_global2() {
+  int historyBits = 1 << globalhistoryBits2;
+  globalpredictors2 = (int*) malloc(historyBits * sizeof(int));
+  for(int i = 0; i < historyBits; i++) {
+    globalpredictors2[i] = WN;
+  }
+  ghr = 0;
+}
+
+uint8_t global2_predict(uint8_t pc){;
+  uint32_t historyBits = 1 << globalhistoryBits2;
+  uint32_t ghr_lower = ghr & (historyBits - 1);
+
+
+  int pc_lower_bits = pc & (historyBits - 1);
+  ghr_lower= pc_lower_bits ^ (ghr_lower);
+
+  //printf("\nprediction start\n");
+  switch(globalpredictors2[ghr_lower]) {
+    case SN:
+      return NOTTAKEN;
+    case WN:
+      return NOTTAKEN;
+    case WWN:
+      return NOTTAKEN;
+    case WWT:
+      return TAKEN;
+    case WT:
+      return TAKEN;
+    case ST:
+      return TAKEN;
+    default:
+      return NOTTAKEN;
+  }
+}
+
+void train_global2(uint8_t pc, uint8_t outcome) {
+  uint32_t historyBits = 1 << globalhistoryBits2;
+  uint32_t ghr_lower = ghr & (historyBits - 1);
+
+  int pc_lower_bits = pc & (historyBits - 1);
+  ghr_lower= pc_lower_bits ^ (ghr_lower);
+
+  switch(globalpredictors2[ghr_lower]) {
+    case SN:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? WN : SN;
+      break;
+    case WN:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? WWN : SN;
+      break;
+    case WWN:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? WWT : WN;
+      break;
+    case WWT:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? WT : WWN;
+      break;
+    case WT:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? ST : WWT;
+      break;
+    case ST:
+      globalpredictors2[ghr_lower] = (outcome == TAKEN) ? ST : WT;
+      break;
+    default:
+      break;
+  }
+  //ghr = ((ghr << 1 ) | outcome);
+}
+void init_tour2(){
+
+  // init global prediction table (12 bits)
+  init_global2();
+  init_gshare();
+  
+  // initialize the choice prediction table (size 12 bits)
+  int historyBits = 1 << globalhistoryBits2;
+  cpredictors = (int*) malloc(historyBits * sizeof(int));
+
+  for(int i = 0; i < historyBits; i++) { // set WN to 2^10 states
+    cpredictors[i] = WN;
+  }
+}
+
+uint8_t tour2_predict(uint32_t pc) { 
+  // conduct global history prediction
+  // choice BHT prediction final mux
+  int historyBits = 1 << globalhistoryBits2;
+  int ghr_lower = ghr & (historyBits - 1);
+
+  switch(cpredictors[ghr_lower]) {
+    case SN:
+      return gshare_predict(pc);
+    case WN:
+      return gshare_predict(pc);
+    case WT:
+      return global2_predict(pc);
+    case ST:
+      return global2_predict(pc);
+    default:
+      printf("Undefined state in predictor table 2 ");
+      return NOTTAKEN;
+  }
+}
+
+// QUESTION: how does the ghr get limited to 12 bits...
+void train_tour2(uint32_t pc, uint8_t outcome) {
+  // train local
+  train_gshare(pc, outcome); 
+  // train global
+  train_global2(pc, outcome);
+
+  // train choice 
+  uint32_t historyBits = 1 << globalhistoryBits2;
+  uint32_t ghr_lower = ghr & (historyBits - 1);
+  
+  switch(cpredictors[ghr_lower]) {
+    case SN:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? WN : SN;
+      break;
+    case WN:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? WT : SN;
+      break;
+    case WT:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WN;
+      break;
+    case ST:
+      cpredictors[ghr_lower] = (outcome == TAKEN) ? ST : WT;
+      break;
+    default:
+      break;
+  }
+  //printf("choice training done\n");
+  ghr = ((ghr << 1 ) | outcome);
+
+}
+
+void cleanup_tour2() {
+  free(globalpredictors2);
+  free(cpredictors);
+  free(localpredictors);
+  free(gpredictors);
+}
 
 // ============================================= //
 //                 non-dev code                  //
@@ -391,10 +601,11 @@ init_predictor()
       init_tour();
       break;
     case CUSTOM:
+      init_tour2();
+      break;
     default:
       break;
   }
-  
 }
 
 // Make a prediction for conditional branch instruction at PC 'pc'
@@ -414,7 +625,7 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
       return tour_predict(pc);
     case CUSTOM:
-      // TODO
+      return tour2_predict(pc);
     default:
       break;
   }
@@ -426,7 +637,6 @@ make_prediction(uint32_t pc)
 // Train the predictor the last executed branch at PC 'pc' and with
 // outcome 'outcome' (true indicates that the branch was taken, false
 // indicates that the branch was not taken)
-//
 
 void
 train_predictor(uint32_t pc, uint8_t outcome)
@@ -439,6 +649,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case TOURNAMENT:
       return train_tour(pc, outcome);
     case CUSTOM:
+      return train_tour2(pc, outcome);
     default:
       break;
   }
