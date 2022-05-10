@@ -31,14 +31,17 @@ int verbose;
 
 // NEW
 // int history_limit = 10;
-int history_mask = 11;
-int localhistoryBits = 10; // 10 for alpha spec (new alpha -> 12 bits works)
+int history_mask = 11; // 11
+int localhistoryBits = 10; // 10 for alpha spec 
 int globalhistoryBits = 12; // 12 for alpha spec (works with tournament now)
-int globalhistoryBits2 = 11; // for 2nd attempt for tournament
+int globalhistoryBits2 = 12; // for 2nd attempt for tournament
+int bimodeBits = 13;
+int cacheSize = 8;
 
-// const int N = 16; // number of weights for perceptron (0th input is 1)
-// double theta = 1.93*N + 14; // for perceptron training threshold
-// int y;
+int num_entries = 10;
+const int N = 32; // number of weights for perceptron (0th input is 1)
+double theta = 1.93*N + 14; // for perceptron training threshold
+int y;
 
 // NOTE TO SELF: Gshare and static already given. Implement Tournament and custom (tage)
 
@@ -59,13 +62,18 @@ int *globalpredictors;
 // int *globalpredictors2;
 int *cpredictors; // choice predictors
 int *localHistoryTable; // local history table
-// int **perceptronTable; // perceptron table
-// int pghr[N-1];
-// int num_pghr = 0;
-// int prediction; // for perceptron
+int **perceptronTable; // perceptron table
+int pghr[N];
+int num_pghr = 0;
+int prediction; // for perceptron
 int ghr;
 
-// custom (tage)
+// custom (bimode)
+int *choicePHT;
+int *PHTNT;
+int *PHTT;
+int *NT_tags;
+int *T_tags;
 // TODO
 
 //------------------------------------//
@@ -384,7 +392,7 @@ void init_global2() {
   int historyBits = 1 << globalhistoryBits2;
   globalpredictors = (int*) malloc(historyBits * sizeof(int));
   for(int i = 0; i < historyBits; i++) {
-    globalpredictors[i] = WN;
+    globalpredictors[i] = WT;
   }
   ghr = 0;
 }
@@ -444,14 +452,15 @@ void init_gshare2() {
   for(int i = 0; i < historyBits; i++) {
     gpredictors[i] = WN;
   }
-  gHistoryTable = 0;
+
+  ghistoryBits = 0;
 }
 
 uint8_t gshare2_predict(uint32_t pc) {
   int size = 13;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
-  int ghistory_lower = gHistoryTable & (historyBits - 1);
+  int ghistory_lower = ghistoryBits & (historyBits - 1);
   int historyIndex = pc_lower_bits ^ (ghistory_lower);
 
   switch(gpredictors[historyIndex]) {
@@ -473,7 +482,7 @@ void train_gshare2(uint32_t pc, uint8_t outcome) {
   int size = 13;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
-  int ghistory_lower = gHistoryTable & (historyBits - 1);
+  int ghistory_lower = ghistoryBits & (historyBits - 1);
   int historyIndex = pc_lower_bits ^ (ghistory_lower);
   
   switch(gpredictors[historyIndex]) {
@@ -493,7 +502,6 @@ void train_gshare2(uint32_t pc, uint8_t outcome) {
       printf("Warning: Undefined state of entry in GSHARE BHT!\n");
       break;
   }
-  gHistoryTable = ((gHistoryTable << 1 ) | outcome);
 }
 
 void
@@ -505,7 +513,7 @@ void init_tour2(){
   // init global prediction table (12 bits)
   init_global2();
   init_gshare2();
-  //init_local();
+  //init_local2();
   
   // initialize the choice prediction table (size 12 bits)
   int historyBits = 1 << globalhistoryBits2;
@@ -522,7 +530,7 @@ void init_tour2(){
 uint8_t tour2_predict(uint32_t pc) { 
   // conduct global history prediction
   // choice BHT prediction final mux
-  int historyBits = 1 << globalhistoryBits2;
+  int historyBits = 1 << globalhistoryBits;
   int ghr_lower = ghr & (historyBits - 1);
 
   switch(cpredictors[ghr_lower]) {
@@ -547,7 +555,7 @@ uint8_t tour2_predict(uint32_t pc) {
 // QUESTION: how does the ghr get limited to 12 bits...
 void train_tour2(uint32_t pc, uint8_t outcome) {
   // train choice 
-  uint32_t historyBits = 1 << globalhistoryBits2;
+  uint32_t historyBits = 1 << globalhistoryBits;
   uint32_t ghr_lower = ghr & (historyBits - 1);
   
   if(gshare2_predict(pc) != global2_predict()){
@@ -603,7 +611,8 @@ void train_tour2(uint32_t pc, uint8_t outcome) {
   }
   // train 
   train_gshare2(pc, outcome); 
-  train_global2(outcome);
+  //train_global2(outcome);
+  train_global2(pc);
 
   ghr = ((ghr << 1 ) | outcome);
 
@@ -613,7 +622,123 @@ void cleanup_tour2() {
   free(globalpredictors);
   free(cpredictors);
   free(gpredictors);
+  free(localpredictors);
 }
+
+// perceptron
+void init_percep(){
+  int weightBits = 1 << num_entries; // number of columns
+  perceptronTable = (int**) malloc((weightBits) * sizeof(int*));
+
+  // allocate array of weights for each entry of the perceptron table (indexed by addresses)
+  for(int i = 0; i < weightBits; i++) { // set WN to 2^10 states
+    perceptronTable[i] = (int*) malloc((N+1) * sizeof(int));
+
+    for(int j = 0; j <= N; j++){
+      perceptronTable[i][j] = 0;
+    }
+  }
+
+  for(int i = 0; i < N; i++){
+    pghr[i] = 0;
+  }
+
+  ghr = 0;
+}
+
+uint8_t percep_predict(uint32_t pc) { 
+  uint32_t historyBits = 1 << num_entries;
+  uint32_t pc_bits = pc & (historyBits - 1);
+  int ghistory_lower = ghr & (historyBits - 1);
+  pc_bits = pc_bits ^ (ghistory_lower);
+
+  y = 0;
+
+  for(int i = 0; i <= N; i++){
+    if(i == 0){
+      y += perceptronTable[pc_bits][0];
+    } else{
+      y += pghr[i-1]*perceptronTable[pc_bits][i];
+    }
+  }
+
+  // comparator
+  if(y > 0){
+    return TAKEN;
+  } else{
+    return NOTTAKEN;
+  } 
+}
+
+void train_percep(uint32_t pc, uint8_t outcome) {
+  uint32_t historyBits = 1 << num_entries;
+  uint32_t pc_bits = pc & (historyBits - 1);
+  int ghistory_lower = ghr & (historyBits - 1);
+  pc_bits = pc_bits ^ (ghistory_lower);
+
+  y = 0;
+
+  for(int i = 0; i <= N; i++){
+    if(i == 0){
+      y += perceptronTable[pc_bits][0];
+    } else{
+      y += pghr[i-1]*perceptronTable[pc_bits][i];
+    }
+  }
+
+  // comparator
+  if(y > 0){
+    prediction = TAKEN;
+  } else{
+    prediction = NOTTAKEN;
+  } 
+
+  // update the weights in perceptron table
+  if((prediction != outcome) || abs(y) <= theta){
+    for(int i = 0; i <= N; i++){
+      if(outcome == NOTTAKEN){
+        if(i == 0){
+          perceptronTable[pc_bits][0] += -1;
+        } else{
+          perceptronTable[pc_bits][i] += -1*pghr[i-1];
+        }
+      } else if(outcome == TAKEN){
+        if(i == 0){
+          perceptronTable[pc_bits][0] += 1;
+        } else{
+          perceptronTable[pc_bits][i] += 1*pghr[i-1];
+        }
+      } else{
+        printf("nooo\n");
+      }
+    }
+  }
+
+  if(num_pghr < N){
+    if(outcome == TAKEN) {
+      pghr[num_pghr] = 1;
+    } else {
+      pghr[num_pghr] = -1;
+    }
+    num_pghr++; 
+  } else{
+    for(int i = N-1; i >= 1; i--){
+      pghr[i] = pghr[i-1];
+    }
+
+    if(outcome == TAKEN) {
+      pghr[0] = 1;
+    } else {
+      pghr[0] = -1;
+    }
+  }
+  ghr = ((ghr << 1 ) | outcome);
+}
+
+void cleanup_percep() {
+  free(perceptronTable);
+}
+
 
 // ============================================= //
 //                 non-dev code                  //
@@ -631,7 +756,7 @@ init_predictor()
       init_tour();
       break;
     case CUSTOM:
-      init_tour2();
+      init_percep();
       break;
     default:
       break;
@@ -655,7 +780,7 @@ make_prediction(uint32_t pc)
     case TOURNAMENT:
       return tour_predict(pc);
     case CUSTOM:
-      return tour2_predict(pc);
+      return percep_predict(pc);
     default:
       break;
   }
@@ -679,7 +804,7 @@ train_predictor(uint32_t pc, uint8_t outcome)
     case TOURNAMENT:
       return train_tour(pc, outcome);
     case CUSTOM:
-      return train_tour2(pc, outcome);
+      return train_percep(pc, outcome);
     default:
       break;
   }
