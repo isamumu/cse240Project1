@@ -39,7 +39,7 @@ int globalhistoryBits2 = 12; // for 2nd attempt for tournament
 int bimodeBits = 13;
 int cacheSize = 8;
 
-int num_entries = 7;
+int num_entries = 8;
 //const int N = 31; 
 double num = 1.93;
 double theta; // for perceptron training threshold
