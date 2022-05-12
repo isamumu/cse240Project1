@@ -30,7 +30,7 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-#define N 64 // number of weights for perceptron (0th input is 1)
+#define N 128 // number of weights for perceptron (0th input is 1)
 // int history_limit = 10;
 int history_mask = 11; // 11
 int localhistoryBits = 10; // 10 for alpha spec 
@@ -39,7 +39,7 @@ int globalhistoryBits2 = 12; // for 2nd attempt for tournament
 // int bimodeBits = 13;
 //int cacheSize = 8;
 
-int num_entries = 5;
+int num_entries = 4;
 //const int N = 31; 
 double num = 1.93;
 double theta; // for perceptron training threshold
