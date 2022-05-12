@@ -30,7 +30,7 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-#define N 64 // number of weights for perceptron (0th input is 1)
+#define N 128 // number of weights for perceptron (0th input is 1)
 // int history_limit = 10;
 int history_mask = 11; // 11
 int localhistoryBits = 10; // 10 for alpha spec 
@@ -508,7 +508,7 @@ void cleanup_percep() {
 }
 
 void init_gshare2() {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   gpredictors = (int*) malloc(historyBits * sizeof(int));
 
@@ -520,7 +520,7 @@ void init_gshare2() {
 }
 
 uint8_t gshare2_predict(uint32_t pc) {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
   int ghistory_lower = ghistoryBits & (historyBits - 1);
@@ -542,7 +542,7 @@ uint8_t gshare2_predict(uint32_t pc) {
 }
 
 void train_gshare2(uint32_t pc, uint8_t outcome) {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
   int ghistory_lower = ghistoryBits & (historyBits - 1);
