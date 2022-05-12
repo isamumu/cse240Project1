@@ -39,11 +39,22 @@ int globalhistoryBits2 = 12; // for 2nd attempt for tournament
 // int bimodeBits = 13;
 //int cacheSize = 8;
 
+int num_choice_entries = 6;
 int num_entries = 4;
 //const int N = 31; 
 double num = 1.93;
 double theta; // for perceptron training threshold
 int y;
+
+// =========== Bits Usage for the TA ============ //
+// custom: tournament with gshare 12 (2 bit counter) vs perceptron
+// gshare 12 --> 2^12 * 2 = 8192 bits
+// tournament choice table --> 2^6 entries * 2 = 128 bits
+// perceptron --> 2^4 (entries) * 9 (threshold bits) * 164 (numweights) = 23616 bits
+//  ------> threshold bits (bits required per weight)= log2(numweights*1.93 + 14)
+// Total = (8192 + 128 + 23616) / 1024 = 31.19 Kbits (excluding extra 320 bits for registers)
+// Therefore, overall not exceeding 32 Kbits
+// ============================================== //
 
 // NOTE TO SELF: Gshare and static already given. Implement Tournament and custom (tage)
 
@@ -579,7 +590,7 @@ void init_percepTour(){
   init_gshare2();
   
   // initialize the choice prediction table (size 12 bits)
-  int historyBits = 1 << 6; //num_entries;
+  int historyBits = 1 << num_choice_entries;
   cpredictors = (int*) malloc(historyBits * sizeof(int));
 
   for(int i = 0; i < historyBits; i++) { // set WN to 2^10 states
@@ -592,7 +603,7 @@ void init_percepTour(){
 uint8_t percepTour_predict(uint32_t pc) { 
   // conduct global history prediction
   // choice BHT prediction final mux
-  int historyBits = 1 << 6; //num_entries;
+  int historyBits = 1 << num_choice_entries;
   int ghr_lower = ghr & (historyBits - 1);
 
   switch(cpredictors[ghr_lower]) {
@@ -612,7 +623,7 @@ uint8_t percepTour_predict(uint32_t pc) {
 
 void train_percepTour(uint32_t pc, uint8_t outcome) {
   // train choice 
-  uint32_t historyBits = 1 << 6; //num_entries;
+  uint32_t historyBits = 1 << num_choice_entries;
   uint32_t ghr_lower = ghr & (historyBits - 1);
   
   if(percep_predict(pc) != gshare2_predict(pc)){
