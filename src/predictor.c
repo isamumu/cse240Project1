@@ -30,14 +30,14 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-#define N 20 // number of weights for perceptron (0th input is 1)
+#define N 26 // number of weights for perceptron (0th input is 1)
 // int history_limit = 10;
 int history_mask = 11; // 11
 int localhistoryBits = 10; // 10 for alpha spec 
 int globalhistoryBits = 12; // 12 for alpha spec (works with tournament now)
 int globalhistoryBits2 = 12; // for 2nd attempt for tournament
-int bimodeBits = 13;
-int cacheSize = 8;
+// int bimodeBits = 13;
+//int cacheSize = 8;
 
 int num_entries = 7;
 //const int N = 31; 
@@ -508,7 +508,7 @@ void cleanup_percep() {
 }
 
 void init_gshare2() {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   gpredictors = (int*) malloc(historyBits * sizeof(int));
 
@@ -520,7 +520,7 @@ void init_gshare2() {
 }
 
 uint8_t gshare2_predict(uint32_t pc) {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
   int ghistory_lower = ghistoryBits & (historyBits - 1);
@@ -542,7 +542,7 @@ uint8_t gshare2_predict(uint32_t pc) {
 }
 
 void train_gshare2(uint32_t pc, uint8_t outcome) {
-  int size = 13;
+  int size = 12;
   int historyBits = 1 << size;
   int pc_lower_bits = pc & (historyBits - 1);
   int ghistory_lower = ghistoryBits & (historyBits - 1);
