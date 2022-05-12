@@ -30,7 +30,7 @@ int bpType;       // Branch Prediction Type
 int verbose;
 
 // NEW
-#define N 170//164 // number of weights for perceptron (0th input is 1)
+#define N 164 // number of weights for perceptron (0th input is 1)
 // int history_limit = 10;
 int history_mask = 11; // 11
 int localhistoryBits = 10; // 10 for alpha spec 
@@ -579,7 +579,7 @@ void init_percepTour(){
   init_gshare2();
   
   // initialize the choice prediction table (size 12 bits)
-  int historyBits = 1 << num_entries;
+  int historyBits = 1 << 6; //num_entries;
   cpredictors = (int*) malloc(historyBits * sizeof(int));
 
   for(int i = 0; i < historyBits; i++) { // set WN to 2^10 states
@@ -592,7 +592,7 @@ void init_percepTour(){
 uint8_t percepTour_predict(uint32_t pc) { 
   // conduct global history prediction
   // choice BHT prediction final mux
-  int historyBits = 1 << num_entries;
+  int historyBits = 1 << 6; //num_entries;
   int ghr_lower = ghr & (historyBits - 1);
 
   switch(cpredictors[ghr_lower]) {
@@ -612,7 +612,7 @@ uint8_t percepTour_predict(uint32_t pc) {
 
 void train_percepTour(uint32_t pc, uint8_t outcome) {
   // train choice 
-  uint32_t historyBits = 1 << num_entries;
+  uint32_t historyBits = 1 << 6; //num_entries;
   uint32_t ghr_lower = ghr & (historyBits - 1);
   
   if(percep_predict(pc) != gshare2_predict(pc)){
