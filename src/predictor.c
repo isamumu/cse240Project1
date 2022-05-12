@@ -66,19 +66,17 @@ int *cpredictors; // choice predictors
 int *localHistoryTable; // local history table
 int **perceptronTable; // perceptron table
 int pghr[N];
-int *plhr; // NEW
 int num_pghr = 0;
-int num_plhr = 0;
 int prediction; // for perceptron
 int ghr;
 
 // custom (bimode)
-int *choicePHT;
-int *PHTNT;
-int *PHTT;
-int *NT_tags;
-int *T_tags;
-// TODO
+// int *choicePHT;
+// int *PHTNT;
+// int *PHTT;
+// int *NT_tags;
+// int *T_tags;
+
 
 //------------------------------------//
 //        Predictor Functions         //
@@ -417,8 +415,8 @@ void init_percep(){
 uint8_t percep_predict(uint32_t pc) { 
   uint32_t historyBits = 1 << num_entries;
   uint32_t pc_bits = pc & (historyBits - 1);
-  int ghistory_lower = ghr & (historyBits - 1);
-  pc_bits = pc_bits ^ (ghistory_lower);
+  // int ghistory_lower = ghr & (historyBits - 1);
+  // pc_bits = pc_bits ^ (ghistory_lower);
 
   y = 0;
 
@@ -441,8 +439,8 @@ uint8_t percep_predict(uint32_t pc) {
 void train_percep(uint32_t pc, uint8_t outcome) {
   uint32_t historyBits = 1 << num_entries;
   uint32_t pc_bits = pc & (historyBits - 1);
-  int ghistory_lower = ghr & (historyBits - 1);
-  pc_bits = pc_bits ^ (ghistory_lower);
+  // int ghistory_lower = ghr & (historyBits - 1);
+  // pc_bits = pc_bits ^ (ghistory_lower);
 
   y = 0;
 
@@ -507,6 +505,7 @@ void cleanup_percep() {
   free(perceptronTable);
 }
 
+// gshare with different parameters
 void init_gshare2() {
   int size = 12;
   int historyBits = 1 << size;

@@ -58,70 +58,7 @@ cleanup_global2() {
   free(globalpredictors);
 }
 
-void init_gshare2() {
-  int size = 13;
-  int historyBits = 1 << size;
-  gpredictors = (int*) malloc(historyBits * sizeof(int));
 
-  for(int i = 0; i < historyBits; i++) {
-    gpredictors[i] = WN;
-  }
-
-  ghistoryBits = 0;
-}
-
-uint8_t gshare2_predict(uint32_t pc) {
-  int size = 13;
-  int historyBits = 1 << size;
-  int pc_lower_bits = pc & (historyBits - 1);
-  int ghistory_lower = ghistoryBits & (historyBits - 1);
-  int historyIndex = pc_lower_bits ^ (ghistory_lower);
-
-  switch(gpredictors[historyIndex]) {
-    case SN:
-      return NOTTAKEN;
-    case WN:
-      return NOTTAKEN;
-    case WT:
-      return TAKEN;
-    case ST:
-      return TAKEN;
-    default:
-      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
-      return NOTTAKEN;
-  }
-}
-
-void train_gshare2(uint32_t pc, uint8_t outcome) {
-  int size = 13;
-  int historyBits = 1 << size;
-  int pc_lower_bits = pc & (historyBits - 1);
-  int ghistory_lower = ghistoryBits & (historyBits - 1);
-  int historyIndex = pc_lower_bits ^ (ghistory_lower);
-  
-  switch(gpredictors[historyIndex]) {
-    case SN:
-      gpredictors[historyIndex] = (outcome == TAKEN) ? WN : SN;
-      break;
-    case WN:
-      gpredictors[historyIndex] = (outcome == TAKEN) ? WT : SN;
-      break;
-    case WT:
-      gpredictors[historyIndex] = (outcome == TAKEN) ? ST : WN;
-      break;
-    case ST:
-      gpredictors[historyIndex] = (outcome == TAKEN) ? ST : WT;
-      break;
-    default:
-      printf("Warning: Undefined state of entry in GSHARE BHT!\n");
-      break;
-  }
-}
-
-void
-cleanup_gshare2() {
-  free(gpredictors);
-}
 
 void init_tour2(){
   // init global prediction table (12 bits)
